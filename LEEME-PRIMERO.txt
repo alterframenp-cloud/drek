@@ -1,0 +1,63 @@
+DREK - VIDEO BLUR & WATERMARK EDITOR
+===================================
+
+1. DESCARGA Y EXTRAE TODO EL ZIP
+   Clic derecho en el ZIP > Extraer todo.
+   Ejemplo de carpeta: C:\Drek
+   No ejecutes start.bat directamente dentro del ZIP.
+
+2. INSTALA LOS DOS REQUISITOS (una sola vez)
+   Python 3.11 o superior (se recomienda 3.12):
+   https://www.python.org/downloads/windows/
+   En el instalador activa "Add Python to PATH".
+
+   FFmpeg (incluye ffmpeg.exe y ffprobe.exe):
+   Abre PowerShell y ejecuta:
+   winget install --id Gyan.FFmpeg --exact
+
+   Alternativa: https://ffmpeg.org/download.html
+   Descarga una compilación de Windows, extráela y agrega la carpeta bin al PATH.
+   Cierra y vuelve a abrir la terminal después de instalar.
+   Para verificar: ffmpeg -version y ffprobe -version.
+
+   NO necesitas instalar Node.js para usar este ZIP: incluye la interfaz compilada.
+
+3. INICIA LA APLICACIÓN
+   Dentro de la carpeta extraída, haz doble clic en start.bat.
+   El primer inicio necesita Internet para instalar los paquetes Python.
+   El navegador se abrirá automáticamente. Mantén abierta la ventana de Drek.
+   Los siguientes inicios reutilizan lo instalado y pueden funcionar sin Internet.
+
+4. EDITA TU PRIMER VIDEO
+   - Seleccionar video o arrastrar un MP4, MOV, MKV o WEBM.
+   - Esperar a que termine de prepararse la vista previa.
+   - Elegir AnimationLover Default o ajustar blur y textos.
+   - Export Video usa los controles actuales.
+   - Quick Export usa el preset guardado seleccionado.
+   - Al terminar, Guardar MP4 permite descargar el resultado en tu PC.
+
+5. GUARDA TU ESTILO
+   Save New: crea un preset con TODOS los parámetros.
+   Update: actualiza el preset seleccionado.
+   Set as Default: lo aplica automáticamente al cargar otro video.
+   Los cambios temporales no alteran el preset sin pulsar Update.
+   Los presets permanecen en el navegador. Usa siempre el mismo navegador.
+
+6. CIERRA EL EDITOR
+   Guarda tus MP4 antes de cambiar de video o cerrar.
+   Ctrl+C en la ventana de Drek detiene el servicio y borra temporales.
+   Los originales no se modifican.
+
+SI ALGO FALLA
+   - Python no encontrado: reinstala activando Add Python to PATH.
+   - FFmpeg no encontrado: comprueba los comandos de arriba y reinicia la terminal.
+   - Puerto ocupado: cierra la otra instancia de Drek.
+   - Falta interfaz: extrae TODO el ZIP, incluida frontend\dist.
+   - Error de video: comprueba el archivo y que haya espacio en disco.
+
+La aplicación procesa tus videos localmente en la PC donde ejecutes start.bat.
+No usa cuentas, APIs externas ni servicios pagos. Lee README.md para más detalles.
+
+Esta copia se reconstruyó y validó el 10 de noviembre de 2026.
+El archivo BAT debe comprobarse en Windows; las pruebas de esta entrega se ejecutan
+en Linux con Chromium y FFmpeg. No incluye un instalador EXE autónomo.
