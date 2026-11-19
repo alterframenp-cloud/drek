@@ -1,4 +1,33 @@
 export type Font = "Studio Sans" | "Studio Serif" | "Studio Mono";
+export type LayerId = "blur" | "watermark" | "diagonal";
+export interface LayerTiming {
+  start: number;
+  end: number | null;
+  transition: "none" | "fade" | "radial";
+  duration: number;
+}
+export type Timings = Record<LayerId, LayerTiming>;
+export interface CutRange {
+  start: number;
+  end: number;
+}
+export interface Edit {
+  start: number;
+  end: number | null;
+  cuts: CutRange[];
+}
+export const defaultTiming = (): LayerTiming => ({
+  start: 0,
+  end: null,
+  transition: "radial",
+  duration: 0.6,
+});
+export const legacyTimings = (): Timings => ({
+  blur: { ...defaultTiming(), transition: "none" },
+  watermark: { ...defaultTiming(), transition: "none" },
+  diagonal: { ...defaultTiming(), transition: "none" },
+});
+export const emptyEdit = (): Edit => ({ start: 0, end: null, cuts: [] });
 export interface TextStyle {
   enabled: boolean;
   text: string;
@@ -29,6 +58,7 @@ export interface Diagonal extends TextStyle {
   y: number;
 }
 export interface Settings {
+  timing: Timings;
   blur: {
     enabled: boolean;
     mode: "gaussian" | "pixelate";
@@ -70,6 +100,11 @@ export interface Job {
   error?: string;
 }
 export const defaults: Settings = {
+  timing: {
+    blur: defaultTiming(),
+    watermark: defaultTiming(),
+    diagonal: defaultTiming(),
+  },
   blur: { enabled: true, mode: "pixelate", gaussian: 35, pixelate: 40 },
   watermark: {
     enabled: true,
@@ -129,6 +164,12 @@ export function validSettings(value: unknown): value is Settings {
   const num = (v: unknown, lo: number, hi: number) =>
     typeof v === "number" && Number.isFinite(v) && v >= lo && v <= hi;
   const bool = (v: unknown) => typeof v === "boolean";
+  const time = (t: LayerTiming) =>
+    t &&
+    num(t.start, 0, Number.MAX_VALUE) &&
+    (t.end === null || (num(t.end, 0, Number.MAX_VALUE) && t.end > t.start)) &&
+    ["none", "fade", "radial"].includes(t.transition) &&
+    num(t.duration, 0, 5);
   const text = (t: TextStyle) =>
     t &&
     bool(t.enabled) &&
@@ -145,7 +186,11 @@ export function validSettings(value: unknown): value is Settings {
     d = s.diagonal,
     b = s.blur;
   return Boolean(
-    b &&
+    s.timing &&
+      ["blur", "watermark", "diagonal"].every((k) =>
+        time(s.timing[k as LayerId]),
+      ) &&
+      b &&
       bool(b.enabled) &&
       ["gaussian", "pixelate"].includes(b.mode) &&
       num(b.gaussian, 0, 100) &&
@@ -174,6 +219,16 @@ export function readStore(): PresetStore {
   const raw = localStorage.getItem(STORE_KEY);
   if (!raw) return initialStore();
   const v = JSON.parse(raw) as PresetStore;
+  // Preserve all saved styles and old constant visibility without resetting presets.
+  if (v && Array.isArray(v.presets))
+    for (const p of v.presets) {
+      if (
+        p.settings &&
+        typeof p.settings === "object" &&
+        !("timing" in p.settings)
+      )
+        p.settings = { ...(p.settings as Settings), timing: legacyTimings() };
+    }
   if (
     !v ||
     v.version !== 1 ||

@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, ValidationError
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from .media import executable, export_command, preview_command, probe
+from .timeline import Edit, Timings, kept_ranges
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = Path(os.environ.get("DREK_CACHE_DIR", str(Path(tempfile.gettempdir()) / "drek-editor")))
@@ -36,6 +37,8 @@ class ExportSettings(BaseModel):
     blur: Blur
     resolution: Literal["original", "720", "1080"] = "original"
     quality: Literal["standard", "high"] = "high"
+    timing: Timings = Field(default_factory=Timings)
+    edit: Edit = Field(default_factory=Edit)
 
 
 def spawn(coro):
@@ -225,7 +228,9 @@ async def render_job(item, asset, settings):
     except Exception as exc:
         item.update(status="error", error=str(exc))
     finally:
-        item["overlay"].unlink(missing_ok=True)
+        layers = item["overlay"].values() if isinstance(item["overlay"], dict) else [item["overlay"]]
+        for layer in layers:
+            layer.unlink(missing_ok=True)
         if item.get("cancelled"):
             item["status"] = "cancelled"
         if item["status"] != "ready":
@@ -233,7 +238,12 @@ async def render_job(item, asset, settings):
 
 
 @app.post("/api/exports", status_code=202)
-async def export_video(video_id: str = Form(...), settings: str = Form(...), overlay: UploadFile = File(...)):
+async def export_video(
+    video_id: str = Form(...), settings: str = Form(...),
+    overlay: UploadFile | None = File(None),
+    watermark: UploadFile | None = File(None), diagonal: UploadFile | None = File(None),
+    watermark_intro: UploadFile | None = File(None), diagonal_intro: UploadFile | None = File(None),
+):
     asset = get_asset(video_id)
     if asset["status"] != "ready":
         raise HTTPException(409, "Espera a que termine la importación.")
@@ -241,25 +251,44 @@ async def export_video(video_id: str = Form(...), settings: str = Form(...), ove
         raise HTTPException(409, "Ya hay una exportación en curso.")
     try:
         parsed = ExportSettings.model_validate_json(settings).model_dump()
+        kept = kept_ranges(asset["duration"], parsed["edit"])
     except (ValueError, ValidationError) as exc:
-        raise HTTPException(400, "Configuración de exportación inválida.") from exc
+        detail = str(exc) if not isinstance(exc, ValidationError) else "Revisa los tiempos: la salida de cada capa o corte debe ser posterior a su inicio."
+        raise HTTPException(400, "Configuración de exportación inválida. " + detail) from exc
     identity = uuid.uuid4().hex
-    layer = asset["directory"] / (identity + ".png")
+    uploads = {k: v for k, v in {"watermark": watermark, "diagonal": diagonal,
+               "watermark_intro": watermark_intro, "diagonal_intro": diagonal_intro}.items() if v is not None}
+    if overlay is not None:
+        if uploads:
+            raise HTTPException(400, "Envía capas separadas o una capa combinada, no ambas.")
+        uploads = {"overlay": overlay}
+    elif "watermark" not in uploads or "diagonal" not in uploads:
+        raise HTTPException(400, "Faltan las capas de texto del video.")
+    else:
+        for name in ["watermark", "diagonal"]:
+            if parsed["timing"][name]["transition"] == "radial" and parsed["timing"][name]["duration"] > 0 and name + "_intro" not in uploads:
+                raise HTTPException(400, "Falta una capa de transición radial.")
+    layers = {}
     try:
-        with layer.open("wb") as output:
-            while chunk := await overlay.read(1024 * 1024):
-                await asyncio.to_thread(output.write, chunk)
-        with Image.open(layer) as image:
-            if image.format != "PNG" or image.size != (asset["width"], asset["height"]) or image.mode != "RGBA":
-                raise ValueError("Dimensiones o formato incorrectos.")
-            image.verify()
+        for name, upload in uploads.items():
+            layer = asset["directory"] / (identity + "-" + name + ".png")
+            layers[name] = layer
+            with layer.open("wb") as output:
+                while chunk := await upload.read(1024 * 1024):
+                    await asyncio.to_thread(output.write, chunk)
+            with Image.open(layer) as image:
+                if image.format != "PNG" or image.size != (asset["width"], asset["height"]) or image.mode != "RGBA":
+                    raise ValueError("Dimensiones o formato incorrectos.")
+                image.verify()
     except (ValueError, UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
-        layer.unlink(missing_ok=True)
+        for layer in layers.values():
+            layer.unlink(missing_ok=True)
         raise HTTPException(400, "Capa de texto PNG inválida.") from exc
     finally:
-        await overlay.close()
-    item = dict(id=identity, video_id=video_id, status="queued", progress=0, duration=asset["duration"],
-                overlay=layer, output=asset["directory"] / (identity + ".mp4"))
+        for upload in uploads.values():
+            await upload.close()
+    item = dict(id=identity, video_id=video_id, status="queued", progress=0, duration=sum(end-start for start,end in kept),
+                overlay=layers["overlay"] if overlay is not None else layers, output=asset["directory"] / (identity + ".mp4"))
     jobs[identity] = item
     spawn(render_job(item, asset, parsed))
     return public(item)

@@ -36,6 +36,21 @@ DREK - VIDEO BLUR & WATERMARK EDITOR
    - Quick Export usa el preset guardado seleccionado.
    - Al terminar, Guardar MP4 permite descargar el resultado en tu PC.
 
+   TIEMPOS Y TRANSICIONES
+   En cada capa usa Desde (s), Hasta (s) y Transición de entrada.
+   Ejemplo: blur desde 4, texto diagonal desde 10 y marca desde 0.
+   Hasta vacío significa hasta el final. Usar posición actual toma el segundo
+   del fotograma que ves. Puedes elegir radial, fundido o sin transición.
+   La duración inicial de transición es 0.6 segundos; se puede cambiar.
+   Usa la barra o las pistas de tiempo para ver el resultado en cualquier momento.
+
+   RECORTES
+   Debajo del reproductor, Conservar desde/hasta quita el principio o el final.
+   Agregar tramo a quitar permite quitar una o varias partes intermedias.
+   El verde se conserva y el rojo se elimina, incluido su audio.
+   Los tiempos siempre son del video ORIGINAL. Los efectos siguen al contenido.
+   Los recortes son de este video; los tiempos/transiciones se guardan en presets.
+
 5. GUARDA TU ESTILO
    Save New: crea un preset con TODOS los parámetros.
    Update: actualiza el preset seleccionado.

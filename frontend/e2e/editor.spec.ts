@@ -206,13 +206,11 @@ test("mobile layout and invalid input", async ({ page }, info) => {
     path: info.outputPath("editor-mobile.png"),
     fullPage: true,
   });
-  await page
-    .getByLabel("Importar archivo de video")
-    .setInputFiles({
-      name: "invalid.txt",
-      mimeType: "text/plain",
-      buffer: Buffer.from("bad"),
-    });
+  await page.getByLabel("Importar archivo de video").setInputFiles({
+    name: "invalid.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("bad"),
+  });
   await expect(page.getByRole("alert")).toContainText("MP4, MOV, MKV o WEBM");
 });
 
@@ -246,6 +244,7 @@ test("long diagonal stays inside portrait and square preview/export", async ({
       .getByLabel("Texto diagonal", { exact: true })
       .fill("REQUEST YOURS — ESTE ES UN TEXTO MUCHO MÁS LARGO ÁLBUM 2026");
     await range(page, "Tamaño diagonal", 40);
+    await range(page, "Posición de reproducción", 0.75);
     await page.waitForFunction(
       () =>
         document.querySelector("video")!.readyState >= 2 &&
@@ -296,6 +295,8 @@ test("long diagonal stays inside portrait and square preview/export", async ({
     const pixels = execFileSync("ffmpeg", [
       "-v",
       "error",
+      "-ss",
+      "0.75",
       "-i",
       output,
       "-frames:v",
@@ -319,4 +320,248 @@ test("long diagonal stays inside portrait and square preview/export", async ({
     expect(count).toBeGreaterThan(50);
     expect(edge).toBe(0);
   }
+});
+
+test("timed entrances, transitions, middle cut and trims reach the saved MP4", async ({
+  page,
+}, info) => {
+  const source = path.join(fixtureDir, "timed-six-seconds.mp4");
+  execFileSync("ffmpeg", [
+    "-v",
+    "error",
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    "color=c=0x274563:s=640x360:r=24:d=6",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=440:duration=6",
+    "-c:v",
+    "libx264",
+    "-c:a",
+    "aac",
+    "-shortest",
+    source,
+  ]);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  await page.goto("/");
+  await page.getByLabel("Importar archivo de video").setInputFiles(source);
+  await expect(
+    page.getByLabel("Vista previa del video con efectos"),
+  ).toBeVisible();
+  await page
+    .getByRole("spinbutton", { name: "Inicio Blur", exact: true })
+    .fill("1");
+  await page
+    .getByRole("spinbutton", { name: "Inicio Texto diagonal", exact: true })
+    .fill("2");
+  await page
+    .getByRole("spinbutton", { name: "Fin Texto diagonal", exact: true })
+    .fill("5");
+  await page.getByLabel("Texto diagonal", { exact: true }).fill("TIMED TEXT");
+  await page
+    .getByRole("combobox", { name: "Transición Marca de agua", exact: true })
+    .selectOption("fade");
+  await page
+    .getByRole("combobox", { name: "Background", exact: true })
+    .selectOption("white");
+  await range(page, "Opacidad del fondo", 100);
+  const seek = async (time: number) => {
+    await range(page, "Posición de reproducción", time);
+    await page.waitForFunction((t) => {
+      const v = document.querySelector("video")!;
+      return (
+        !v.seeking && v.readyState >= 2 && Math.abs(v.currentTime - t) < 0.05
+      );
+    }, time);
+    await page.evaluate(
+      () =>
+        new Promise((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(resolve)),
+        ),
+    );
+  };
+  const energy = () =>
+    page.locator(".video-stage canvas").evaluate((node) => {
+      const c = node as HTMLCanvasElement,
+        d = c.getContext("2d")!.getImageData(0, 0, c.width, c.height).data;
+      const base = [
+        d[(10 * c.width + 10) * 4],
+        d[(10 * c.width + 10) * 4 + 1],
+        d[(10 * c.width + 10) * 4 + 2],
+      ];
+      let sum = 0,
+        white = 0;
+      for (let y = 35; y < 310; y++)
+        for (let x = 40; x < 600; x++) {
+          const i = (y * c.width + x) * 4;
+          sum +=
+            Math.abs(d[i] - base[0]) +
+            Math.abs(d[i + 1] - base[1]) +
+            Math.abs(d[i + 2] - base[2]);
+          if (d[i] > 230 && d[i + 1] > 230 && d[i + 2] > 230) white++;
+        }
+      return { sum, white };
+    });
+  await seek(1.5);
+  const before = await energy();
+  expect(before.white).toBe(0);
+  await seek(2.25);
+  const entering = await energy();
+  await seek(3);
+  const after = await energy();
+  expect(entering.sum).toBeGreaterThan(before.sum + 10000);
+  expect(entering.sum).toBeLessThan(after.sum);
+  expect(after.white).toBeGreaterThan(1000);
+  await seek(5.2);
+  expect((await energy()).white).toBe(0);
+  await page.getByRole("button", { name: "Save New", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: "Nombre del preset" })
+    .fill("Tiempos guardados");
+  await page
+    .getByRole("button", { name: "Guardar preset", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Set as Default", exact: true })
+    .click();
+  await page
+    .getByRole("spinbutton", { name: "Conservar desde", exact: true })
+    .fill("0.5");
+  await page
+    .getByRole("spinbutton", { name: "Conservar hasta", exact: true })
+    .fill("5.5");
+  await seek(1);
+  await page
+    .getByRole("button", { name: "Agregar tramo a quitar", exact: true })
+    .click();
+  await page
+    .getByRole("spinbutton", { name: "Inicio corte 1", exact: true })
+    .fill("1");
+  await page
+    .getByRole("spinbutton", { name: "Fin corte 1", exact: true })
+    .fill("1.5");
+  await expect(page.getByText("4.50 s", { exact: true })).toBeVisible();
+  await seek(0.8);
+  await page.evaluate(() => {
+    const samples: number[] = [];
+    (window as unknown as { samples: number[] }).samples = samples;
+    document
+      .querySelector("video")!
+      .addEventListener("timeupdate", () =>
+        samples.push(document.querySelector("video")!.currentTime),
+      );
+  });
+  await page.getByRole("button", { name: "Reproducir", exact: true }).click();
+  await page.waitForFunction(
+    () => document.querySelector("video")!.currentTime > 1.85,
+  );
+  await page.getByRole("button", { name: "Pausar", exact: true }).click();
+  const samples = await page.evaluate(
+    () => (window as unknown as { samples: number[] }).samples,
+  );
+  expect(samples.some((t) => t > 1.02 && t < 1.48)).toBe(false);
+  await page.screenshot({
+    path: info.outputPath("timeline-and-cuts.png"),
+    fullPage: true,
+  });
+  for (const button of ["Export Video", "Quick Export"]) {
+    await page.getByRole("button", { name: button, exact: true }).click();
+    await expect(
+      page.getByText("Tu video está listo", { exact: true }),
+    ).toBeVisible({ timeout: 40_000 });
+    const promise = page.waitForEvent("download");
+    await page.getByRole("link", { name: "Guardar MP4" }).click();
+    const output = info.outputPath(button.replace(" ", "-") + ".mp4");
+    await (await promise).saveAs(output);
+    const meta = JSON.parse(
+      execFileSync(
+        "ffprobe",
+        ["-v", "error", "-show_format", "-show_streams", "-of", "json", output],
+        { encoding: "utf8" },
+      ),
+    );
+    expect(Math.abs(+meta.format.duration - 4.5)).toBeLessThan(0.12);
+    expect(meta.streams[1].codec_type).toBe("audio");
+    for (const [t, visible] of [
+      [0.3, false],
+      [1.8, true],
+      [4.3, false],
+    ] as const) {
+      const pixels = execFileSync("ffmpeg", [
+        "-v",
+        "error",
+        "-ss",
+        String(t),
+        "-i",
+        output,
+        "-frames:v",
+        "1",
+        "-pix_fmt",
+        "rgb24",
+        "-f",
+        "rawvideo",
+        "-",
+      ]);
+      let white = 0;
+      for (let y = 35; y < 310; y++)
+        for (let x = 40; x < 600; x++) {
+          const i = (y * 640 + x) * 3;
+          if (pixels[i] > 230 && pixels[i + 1] > 230 && pixels[i + 2] > 230)
+            white++;
+        }
+      expect(white > 1000).toBe(visible);
+    }
+    const mid = execFileSync("ffmpeg", [
+      "-v",
+      "error",
+      "-ss",
+      "1.25",
+      "-i",
+      output,
+      "-frames:v",
+      "1",
+      "-pix_fmt",
+      "rgb24",
+      "-f",
+      "rawvideo",
+      "-",
+    ]);
+    const base = [
+      mid[(10 * 640 + 10) * 3],
+      mid[(10 * 640 + 10) * 3 + 1],
+      mid[(10 * 640 + 10) * 3 + 2],
+    ];
+    let encodedEnergy = 0;
+    for (let y = 35; y < 310; y++)
+      for (let x = 40; x < 600; x++) {
+        const i = (y * 640 + x) * 3;
+        encodedEnergy +=
+          Math.abs(mid[i] - base[0]) +
+          Math.abs(mid[i + 1] - base[1]) +
+          Math.abs(mid[i + 2] - base[2]);
+      }
+    expect(Math.abs(encodedEnergy / entering.sum - 1)).toBeLessThan(0.18);
+  }
+  await page.reload();
+  await expect(
+    page.getByRole("spinbutton", {
+      name: "Inicio Texto diagonal",
+      exact: true,
+    }),
+  ).toHaveValue("2");
+  await page.getByLabel("Importar archivo de video").setInputFiles(source);
+  await expect(
+    page.getByLabel("Vista previa del video con efectos"),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("spinbutton", { name: "Conservar desde", exact: true }),
+  ).toHaveValue("0");
+  await expect(
+    page.getByRole("spinbutton", { name: "Inicio corte 1", exact: true }),
+  ).toHaveCount(0);
+  expect(errors).toEqual([]);
 });

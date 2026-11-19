@@ -1,4 +1,5 @@
 import type { Settings, TextStyle } from "./model";
+import { phase } from "./timeline";
 export const diagonalAngle = (w: number, h: number) =>
   (-Math.atan2(h, w) * 180) / Math.PI;
 export const blurSigma = (w: number, h: number, v: number) =>
@@ -143,4 +144,71 @@ export function overlayBlob(canvas: HTMLCanvasElement): Promise<Blob> {
       "image/png",
     ),
   );
+}
+
+export interface LayerImages {
+  sharp: HTMLCanvasElement;
+  intro: HTMLCanvasElement;
+}
+export function renderLayer(
+  width: number,
+  height: number,
+  settings: Settings,
+  layer: "diagonal" | "watermark",
+): LayerImages {
+  const only = {
+    ...settings,
+    diagonal: {
+      ...settings.diagonal,
+      enabled: layer === "diagonal" && settings.diagonal.enabled,
+    },
+    watermark: {
+      ...settings.watermark,
+      enabled: layer === "watermark" && settings.watermark.enabled,
+    },
+  };
+  const sharp = renderOverlay(
+    document.createElement("canvas"),
+    width,
+    height,
+    only,
+  );
+  const intro = document.createElement("canvas");
+  intro.width = width;
+  intro.height = height;
+  const c = intro.getContext("2d")!;
+  // Radial/zoom blur from multiple scaled samples, shared unchanged with FFmpeg.
+  c.filter = `blur(${Math.min(width, height) * 0.007}px)`;
+  c.globalAlpha = 0.22;
+  for (let i = 0; i < 8; i++) {
+    const scale = 0.88 + i * 0.02;
+    c.drawImage(
+      sharp,
+      (width - width * scale) / 2,
+      (height - height * scale) / 2,
+      width * scale,
+      height * scale,
+    );
+  }
+  return { sharp, intro };
+}
+export function drawTimedLayer(
+  ctx: CanvasRenderingContext2D,
+  images: LayerImages,
+  timing: Settings["timing"]["diagonal"],
+  time: number,
+  duration: number,
+  width: number,
+  height: number,
+) {
+  const p = phase(timing, time, duration);
+  if (p.opacity <= 0) return;
+  ctx.save();
+  if (timing.transition === "radial") {
+    ctx.globalAlpha = p.opacity * (1 - p.entry);
+    ctx.drawImage(images.intro, 0, 0, width, height);
+    ctx.globalAlpha = p.opacity * p.entry;
+  } else ctx.globalAlpha = p.opacity;
+  ctx.drawImage(images.sharp, 0, 0, width, height);
+  ctx.restore();
 }

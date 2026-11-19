@@ -22,7 +22,15 @@ import {
   Zap,
 } from "lucide-react";
 import { api, upload } from "./api";
-import { clone, defaults, initialStore, readStore, STORE_KEY } from "./model";
+import {
+  clone,
+  defaults,
+  initialStore,
+  readStore,
+  STORE_KEY,
+  emptyEdit,
+  validSettings,
+} from "./model";
 import type {
   Diagonal,
   Font,
@@ -32,9 +40,17 @@ import type {
   TextStyle,
   VideoAsset,
   Watermark,
+  Edit,
+  LayerId,
+  LayerTiming,
 } from "./model";
-import { diagonalAngle, overlayBlob, renderOverlay } from "./render";
+import { diagonalAngle, overlayBlob, renderLayer } from "./render";
 import Preview, { timeLabel } from "./Preview";
+import TimelineControls, {
+  TimingControls,
+  layerNames,
+} from "./TimelineControls";
+import { keptRanges } from "./timeline";
 
 const fonts: Font[] = ["Studio Sans", "Studio Serif", "Studio Mono"];
 const message = (e: unknown) =>
@@ -206,6 +222,12 @@ export default function App() {
   );
   const [asset, setAsset] = useState<VideoAsset | null>(null),
     [job, setJob] = useState<Job | null>(null);
+  const [edit, setEdit] = useState<Edit>(emptyEdit);
+  const [cursor, setCursor] = useState(0);
+  const [seekRequest, setSeekRequest] = useState<{
+    time: number;
+    serial: number;
+  } | null>(null);
   const [importing, setImporting] = useState(false),
     [stage, setStage] = useState(""),
     [progress, setProgress] = useState(0),
@@ -229,6 +251,17 @@ export default function App() {
     JSON.stringify(settings) !== JSON.stringify(selectedPreset.settings);
   const busy =
     starting || job?.status === "queued" || job?.status === "processing";
+  let editError = "";
+  if (asset)
+    try {
+      keptRanges(asset.duration, edit);
+    } catch (e) {
+      editError = message(e);
+    }
+  const seekTo = (time: number) =>
+    setSeekRequest((s) => ({ time, serial: (s?.serial ?? 0) + 1 }));
+  const timing = (id: LayerId, value: LayerTiming) =>
+    setSettings((s) => ({ ...s, timing: { ...s.timing, [id]: value } }));
   const showError = useCallback((s: string) => setError(s), []);
   useEffect(() => {
     api("/api/health")
@@ -290,6 +323,10 @@ export default function App() {
   const blur = (v: Partial<Settings["blur"]>) =>
     setSettings((s) => ({ ...s, blur: { ...s.blur, ...v } }));
   const persist = (next: PresetStore) => {
+    if (!next.presets.every((p) => validSettings(p.settings))) {
+      setError("Revisa los tiempos de las capas antes de guardar el preset.");
+      return false;
+    }
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify(next));
       setStore(next);
@@ -315,6 +352,10 @@ export default function App() {
     setDialogError("");
   };
   const submitDialog = () => {
+    if (dialog === "save" && !validSettings(settings)) {
+      setDialogError("Revisa los tiempos de las capas antes de guardar.");
+      return;
+    }
     if (dialog === "delete") {
       const presets = store.presets.filter((p) => p.id !== selected);
       if (
@@ -381,6 +422,9 @@ export default function App() {
         if (next.status === "cancelled") break;
         if (next.status === "ready") {
           setAsset(next);
+          setEdit(emptyEdit());
+          setCursor(0);
+          setSeekRequest(null);
           setJob(null);
           const p = store.presets.find((p) => p.id === store.defaultId);
           if (p) {
@@ -427,24 +471,35 @@ export default function App() {
     );
     if (quick) setSettings(clone(snapshot));
     setStarting(true);
+    setJob(null);
     setError("");
     try {
+      if (!validSettings(snapshot))
+        throw new Error(
+          "Revisa los tiempos de las capas: la salida debe ser posterior a la entrada.",
+        );
+      keptRanges(asset.duration, edit);
       await document.fonts.ready;
-      const layer = renderOverlay(
-        document.createElement("canvas"),
-        asset.width,
-        asset.height,
-        snapshot,
-      );
       const form = new FormData();
       form.append("video_id", asset.id);
-      form.append("overlay", await overlayBlob(layer), "overlay.png");
+      for (const id of ["diagonal", "watermark"] as const) {
+        const images = renderLayer(asset.width, asset.height, snapshot, id);
+        form.append(id, await overlayBlob(images.sharp), id + ".png");
+        if (snapshot.timing[id].transition === "radial")
+          form.append(
+            id + "_intro",
+            await overlayBlob(images.intro),
+            id + "-intro.png",
+          );
+      }
       form.append(
         "settings",
         JSON.stringify({
           blur: snapshot.blur,
           resolution: snapshot.resolution,
           quality: snapshot.quality,
+          timing: snapshot.timing,
+          edit,
         }),
       );
       setJob(await api<Job>("/api/exports", { method: "POST", body: form }));
@@ -618,6 +673,13 @@ export default function App() {
             <p className="hint">
               Solo el video se desenfoca. Los textos quedan nítidos.
             </p>
+            <TimingControls
+              value={settings.timing.blur}
+              onChange={(v) => timing("blur", v)}
+              name={layerNames.blur}
+              current={cursor}
+              duration={asset?.duration}
+            />
           </Section>
           <Section
             title="Watermark"
@@ -735,6 +797,13 @@ export default function App() {
               step={0.1}
               onChange={(marginY) => water({ marginY })}
             />
+            <TimingControls
+              value={settings.timing.watermark}
+              onChange={(v) => timing("watermark", v)}
+              name={layerNames.watermark}
+              current={cursor}
+              duration={asset?.duration}
+            />
           </Section>
           <Section
             title="Diagonal Text"
@@ -819,6 +888,13 @@ export default function App() {
                 Restaurar diagonal
               </button>
             </details>
+            <TimingControls
+              value={settings.timing.diagonal}
+              onChange={(v) => timing("diagonal", v)}
+              name={layerNames.diagonal}
+              current={cursor}
+              duration={asset?.duration}
+            />
           </Section>
           <p className="sidebar-foot">Presets guardados en este navegador</p>
         </aside>
@@ -900,6 +976,9 @@ export default function App() {
                 settings={settings}
                 fontsReady={fontsReady}
                 onError={showError}
+                edit={edit}
+                onTimeChange={setCursor}
+                seekRequest={seekRequest}
               />
             ) : (
               <div className="empty-preview">
@@ -959,6 +1038,16 @@ export default function App() {
               ))}
             </div>
           )}
+          {asset && (
+            <TimelineControls
+              asset={asset}
+              settings={settings}
+              edit={edit}
+              onEdit={setEdit}
+              current={cursor}
+              onSeek={seekTo}
+            />
+          )}
           <section className="export-panel">
             <div className="export-title">
               <ArrowDownToLine size={21} />
@@ -1012,7 +1101,8 @@ export default function App() {
                     !selectedPreset ||
                     busy ||
                     importing ||
-                    !fontsReady
+                    !fontsReady ||
+                    !!editError
                   }
                   title="Exporta el preset guardado seleccionado"
                   onClick={() => void exportVideo(true)}
@@ -1022,7 +1112,14 @@ export default function App() {
                 </button>
                 <button
                   className="button primary"
-                  disabled={!asset || busy || importing || !fontsReady}
+                  disabled={
+                    !asset ||
+                    busy ||
+                    importing ||
+                    !fontsReady ||
+                    !!editError ||
+                    !validSettings(settings)
+                  }
                   onClick={() => void exportVideo()}
                 >
                   {busy ? (

@@ -1,4 +1,47 @@
-# Validación de Drek 1.0.1
+# Validación de Drek
+
+## Versión 1.1.0 — tiempos, transiciones y recortes (19 de noviembre de 2026)
+
+Resultados de esta versión:
+
+| Comprobación | Resultado |
+| --- | --- |
+| `npm run build` | TypeScript y Vite correctos, interfaz compilada incluida |
+| `python -m pytest backend/tests -q` | **28 aprobadas**, sin pruebas omitidas |
+| `npm test` | **9 aprobadas** |
+| `DREK_CHROMIUM=/usr/bin/chromium npm run test:e2e` | **4 aprobadas** |
+
+Se probaron tiempos de entrada y salida por capa, ninguna transición/fundido/radial,
+el ejemplo de blur en 4 s, diagonal en 10 s y marca desde 0 s, y su presencia en
+fotogramas reales de los MP4. Se comparó también una fase intermedia de la entrada
+radial del preview con el MP4 después de quitar contenido, con tolerancia para
+muestreo temporal y compresión.
+
+Las comprobaciones de recortes incluyen principio, final, varios segmentos
+conservados, cortes intermedios, superpuestos y adyacentes, selección inválida y
+selección que elimina todo. Se verificaron contenido, duración y audio sincronizado
+en resultados con audio y sin él. Las capas temporizadas no alteraron la cantidad
+de fotogramas ni sus timestamps en la prueba de FPS variables sin recortes.
+
+En el navegador se comprobó la búsqueda de fotogramas, las entradas visibles,
+salidas, el salto de tramos al reproducir, Export Video y Quick Export sobre la
+misma selección, persistencia de tiempos en presets y restablecimiento de recortes
+al importar otro archivo. Los presets anteriores se migran sin perder estilos ni
+su visibilidad constante. Se conserva la validación previa de formatos, geometría,
+fuentes, márgenes y reparación del entorno Python.
+
+El render usa las mismas imágenes transparentes de cada capa y su entrada radial
+en preview y FFmpeg. Las imágenes se decodifican una vez y se repiten en el motor;
+la máscara radial del video se calcula solo durante los intervalos de transición.
+Al iniciar otra exportación, se retira la descarga del resultado anterior para
+que el botón Guardar MP4 corresponda al render que se acaba de terminar.
+
+Entorno de comprobación: Linux, Python 3.12, Node 24, FFmpeg 7.1 y Chromium.
+**Windows nativo no está disponible en esta máquina**; el lanzador y la instalación
+concreta del usuario deben comprobarse allí. Las transiciones se muestrean en
+fotogramas; Gaussian y H.264 mantienen las diferencias finas ya descritas abajo.
+
+## Historial de la versión 1.0.1
 
 Reconstrucción y comprobación del 10 de noviembre de 2026. La máquina actual no
 conservaba el proyecto ni el ZIP del 22 de octubre; el remoto de Git seguía vacío.

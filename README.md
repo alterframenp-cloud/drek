@@ -4,9 +4,9 @@ Editor local de video para Windows con desenfoque/pixelado, marca de agua inferi
 texto diagonal y presets completos. Interfaz React + TypeScript + Vite; motor
 Python + FastAPI + FFmpeg. No requiere cuentas, servicios pagos ni APIs externas.
 
-Esta copia **1.0.1** se reconstruyó el 10 de noviembre de 2026 a partir del código
-del hilo original, porque la máquina actual no conservaba aquellos archivos.
-La validación de esta copia se documenta por separado en `VALIDATION.md`.
+La versión **1.1.0** agrega tiempos por capa, transiciones y recortes del video.
+Incluye la reparación de entornos Python del lanzador Windows. La validación se
+documenta en `VALIDATION.md`.
 
 ## Empezar en Windows
 
@@ -81,6 +81,65 @@ El icono de audio solo silencia la reproducción; no elimina el audio del MP4.
 No se agrega una marca propia de Drek ni hay límites artificiales de duración.
 La capacidad práctica depende de CPU, RAM y disco. Reserva espacio para la copia
 del original, el proxy de reproducción y el resultado.
+
+## Cuándo entra cada efecto
+
+Cada una de las tres capas tiene **Aparición en el video**:
+
+- **Desde (s):** instante en que comienza a entrar. Por ejemplo: blur en 4,
+  texto diagonal en 10 y marca de agua en 0.
+- **Hasta (s):** instante en que desaparece. Deja el campo vacío para mantenerla
+  hasta el final. Se admiten decimales, como 4.25 segundos.
+- **Usar posición actual:** toma el segundo del fotograma que estás viendo.
+- **Transición de entrada:** desenfoque radial suave, fundido suave o sin transición.
+- **Duración de transición:** entre 0 y 5 segundos. El valor inicial para capas
+  nuevas es radial de 0.6 s. Una duración cero es una entrada instantánea.
+
+En los textos, la transición radial combina muestras de zoom/desenfoque y fundido
+hasta dejar nítida la capa. En blur/pixelado, revela el efecto desde el centro hacia
+los bordes. El fundido cambia progresivamente la presencia de la capa. Si eliges
+un tiempo de salida, usa la misma duración para desaparecer; en rangos muy cortos
+se acortan las transiciones para que quepan sin solaparse.
+
+La línea de tiempo muestra una pista por capa y el cursor de reproducción. Puedes
+hacer clic en las pistas o mover la barra del reproductor para comprobar cualquier
+fotograma, también con el video pausado. En el instante exacto de entrada una
+transición suave aún tiene opacidad cero: reproduce o avanza para ver cómo aparece.
+
+Los tiempos se guardan en los presets, incluidas las transiciones. **Update**
+guarda los cambios; Quick Export usa los tiempos guardados y Export Video usa
+los actuales. Los presets antiguos conservan sus estilos, visibilidad desde 0 y
+entradas sin transición al migrar; puedes elegirles una transición y actualizarlos.
+Los tiempos son segundos absolutos: si una capa empieza después del final de un
+video más corto, se avisa y esa capa no aparece.
+
+## Recortar inicio, final y partes intermedias
+
+Debajo del reproductor está **Tiempos y recortes**:
+
+1. **Conservar desde** quita el principio anterior a ese segundo.
+2. **Conservar hasta** quita lo que viene después. Vacío significa el final original.
+3. **Agregar tramo a quitar** permite indicar inicio y fin de una parte intermedia.
+   Puedes agregar varias y usar la posición actual para marcar sus límites.
+4. El icono de papelera elimina un corte; **Restablecer recortes** recupera todo el video.
+
+La pista de video muestra en verde lo conservado y en rojo lo eliminado; también
+se muestra la duración resultante. Los cortes solapados se unen sin quitar tiempo
+dos veces. Si no queda contenido válido, la interfaz lo informa e impide exportar.
+
+**Todos los tiempos se refieren al video original.** Los efectos siguen al contenido
+al recortar: si quitas los primeros 2 segundos, un texto configurado en el segundo
+10 aparece en el segundo 8 del resultado. Una entrada dentro de un tramo eliminado
+también se elimina; no se reinicia su animación después del corte.
+
+**Saltar los tramos recortados al reproducir** permite comprobar la selección sin
+esperar a exportar. Puedes buscar un fotograma eliminado con el video pausado para
+ajustar un límite: se marca como tramo que no saldrá en el MP4.
+
+La exportación une los tramos conservados y recorta el audio junto con el video.
+Los recortes se aplican tanto a Export Video como a Quick Export. Son específicos
+del video cargado y se restablecen al importar otro; no se guardan en el preset.
+El original se conserva sin modificaciones.
 
 ## Presets y exportación rápida
 
@@ -158,11 +217,14 @@ dañado, corrige la causa e importa o exporta nuevamente.
 ```text
 backend/app.py          API, trabajos asíncronos, cancelación y temporales
 backend/media.py        detección, FFmpeg y FFprobe
+backend/timeline.py     tiempos por capa y rangos conservados
 backend/tests/          pruebas reales de procesamiento
 frontend/src/App.tsx    pantalla, controles y presets
 frontend/src/Preview.tsx reproductor y efectos en vivo
 frontend/src/render.ts  capas transparentes compartidas con la exportación
 frontend/src/model.ts   modelo normalizado y validación
+frontend/src/TimelineControls.tsx tiempos por capa y recortes visuales
+frontend/src/timeline.ts reglas temporales compartidas por el reproductor
 frontend/e2e/           recorridos de navegador y MP4 descargados
 frontend/dist/          interfaz compilada, incluida en el ZIP
 scripts/prepare.py      preparación incremental
