@@ -49,6 +49,11 @@ DREK - VIDEO BLUR & WATERMARK EDITOR
    Los originales no se modifican.
 
 SI ALGO FALLA
+   - "did not find executable ... Python314\python.exe": el entorno .venv apunta
+     a un Python que se desinstaló o cambió de ubicación. El start.bat actualizado
+     lo conserva en .local\venv-backups y crea otro con el Python disponible.
+     Con un start.bat antiguo: renombra .venv a .venv-anterior y vuelve a iniciarlo.
+     No hace falta reinstalar FFmpeg por ese mensaje de Python.
    - Python no encontrado: reinstala activando Add Python to PATH.
    - FFmpeg no encontrado: comprueba los comandos de arriba y reinicia la terminal.
    - Puerto ocupado: cierra la otra instancia de Drek.

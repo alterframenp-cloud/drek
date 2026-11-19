@@ -61,3 +61,20 @@ Límites:
 
 Los resultados anteriores corresponden a esta copia actual; no dependen de los
 resultados de la sesión de octubre ni prueban publicación/restauración del entorno.
+
+## Corrección de arranque — 19 de noviembre de 2026
+
+El usuario informó que un `.venv` existente apuntaba a un Python 3.14 eliminado.
+La existencia de `python.exe` no garantizaba que pudiera ejecutarse; además el BAT
+presentaba su fallo como un problema de FFmpeg. Ahora `scripts/bootstrap.py`,
+ejecutado con un Python instalado, comprueba el intérprete del entorno y pip.
+Conserva los entornos inutilizables en `.local/venv-backups` y crea uno nuevo.
+`start.bat` detiene el arranque si falla esta preparación, sin atribuirla a FFmpeg.
+
+Se ejecutó `python -m pytest backend/tests/test_bootstrap.py -q`: **5 aprobadas**.
+Incluyen creación y reutilización real en una ruta con espacios, reparación de un
+ejecutable existente pero inválido con conservación de sus archivos y del estado
+de instalación, rechazo de un intérprete ausente o global, salida 103 como la del
+fallo de Windows y timeout de un intérprete que no responde. Las comprobaciones
+de creación/reparación se ejecutaron en Linux. El BAT y la instalación concreta
+del usuario siguen necesitando confirmación en Windows.

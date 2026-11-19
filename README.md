@@ -42,6 +42,15 @@ El instalador crea un entorno Python `.venv` y usa cachés dentro de `.local`.
 Comprueba los requisitos por hash: los siguientes inicios reutilizan lo instalado
 y pueden funcionar sin Internet. No hay un `.exe` autónomo.
 
+Si desinstalaste o moviste Python después de usar Drek, el lanzador comprueba que
+el Python de `.venv` realmente pueda ejecutarse y que incluya pip. Si falla,
+conserva el entorno anterior en `.local/venv-backups` y crea uno nuevo con un
+Python 3.11+ disponible. Esto corrige el mensaje `did not find executable` de
+entornos que aún apuntan, por ejemplo, a una instalación eliminada de Python 3.14.
+No se presenta ese problema como un error de FFmpeg. La reparación puede necesitar
+Internet para reinstalar las dependencias. En copias antiguas puedes renombrar
+manualmente `.venv` a `.venv-anterior` y volver a ejecutar `start.bat`.
+
 Si FFmpeg está fuera del PATH, se admiten `FFMPEG_BINARY` y `FFPROBE_BINARY` con
 las rutas completas a cada ejecutable. No incluyas comillas dentro de sus valores.
 El arranque comprueba ambos ejecutables y detecta un puerto 8765 ocupado.
