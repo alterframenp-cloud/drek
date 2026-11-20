@@ -20,7 +20,7 @@ def main():
     except (OSError, ValueError):
         state = {}
     requirements = hashlib.sha256((ROOT / "backend" / "requirements.txt").read_bytes()).hexdigest() + sys.version
-    installed = all(importlib.util.find_spec(name) for name in ["fastapi", "uvicorn", "multipart", "PIL"])
+    installed = all(importlib.util.find_spec(name) for name in ["fastapi", "uvicorn", "multipart", "PIL", "pydantic"])
     if state.get("python") != requirements or not installed:
         subprocess.run([sys.executable, "-m", "pip", "install", "-r", str(ROOT / "backend" / "requirements.txt")], check=True)
     frontend = ROOT / "frontend"

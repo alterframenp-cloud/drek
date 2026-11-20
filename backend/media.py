@@ -1,21 +1,11 @@
 """FFmpeg operations; text is supplied as a transparent Canvas PNG."""
 import json
 import math
-import os
-import shutil
 import subprocess
 from fractions import Fraction
 from pathlib import Path
+from .runtime import executable
 from .timeline import ramp, progress_expression, kept_ranges
-
-from .timeline import image_filters, kept_ranges, progress_expression
-
-
-def executable(name):
-    found = shutil.which(os.environ.get(name.upper() + "_BINARY", name))
-    if not found:
-        raise RuntimeError(f"No se encontró {name}. Instala FFmpeg y agrega su carpeta bin al PATH.")
-    return found
 
 
 def probe(path: Path):

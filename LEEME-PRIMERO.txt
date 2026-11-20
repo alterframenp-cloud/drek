@@ -64,6 +64,11 @@ DREK - VIDEO BLUR & WATERMARK EDITOR
    Los originales no se modifican.
 
 SI ALGO FALLA
+   - "No module named pydantic" en la versión 1.1.0: el primer inicio intentaba
+     comprobar FFmpeg antes de instalar las dependencias. Se corrigió en 1.1.1.
+     Para reparar la copia existente, abre cmd en la carpeta de Drek y ejecuta:
+     .\.venv\Scripts\python.exe -m pip install -r .\backend\requirements.txt
+     Cuando termine sin errores, abre start.bat nuevamente.
    - "did not find executable ... Python314\python.exe": el entorno .venv apunta
      a un Python que se desinstaló o cambió de ubicación. El start.bat actualizado
      lo conserva en .local\venv-backups y crea otro con el Python disponible.

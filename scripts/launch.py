@@ -15,7 +15,7 @@ def main():
     parser = argparse.ArgumentParser(description="Drek: editor local")
     parser.add_argument("--no-browser", action="store_true")
     options = parser.parse_args()
-    from backend.media import executable
+    from backend.runtime import executable
     executable("ffmpeg")
     executable("ffprobe")
     if not (ROOT / "frontend" / "dist" / "index.html").is_file():

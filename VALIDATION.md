@@ -1,5 +1,29 @@
 # Validación de Drek
 
+## Versión 1.1.1 — instalación limpia (19 de noviembre de 2026)
+
+Se corrigió un fallo del primer arranque en Windows: el BAT importaba
+`backend.media` para buscar FFmpeg antes de instalar paquetes. El módulo de
+edición cargaba Pydantic a través de la línea de tiempo y se detenía en un venv
+recién creado. Ahora el orden es bootstrap, instalación, comprobación de FFmpeg
+y lanzamiento. La búsqueda de ejecutables está aislada en `backend.runtime`, que
+solo requiere la biblioteca estándar. El instalador comprueba también la
+presencia de Pydantic al decidir si necesita instalar dependencias.
+
+Pasaron **29 pruebas del backend**, incluidas **6 de bootstrap** y una comprobación
+con un venv nuevo sin Pydantic ni FastAPI. Además se copió la distribución a una carpeta
+con espacios y se probó su instalación desde cero con solo paquetes de producción:
+
+- ausencia inicial de Pydantic/FastAPI y comprobación de FFmpeg sin ellos;
+- ejecución real de `scripts/prepare.py` y repetición sin reinstalar;
+- inicio mediante `scripts/launch.py --no-browser`, página y API con HTTP 200;
+- importación de video, preview con HTTP 206, transición radial, recortes y descarga;
+- archivo H.264 con audio y duración esperada de 1.25 segundos.
+
+Esta comprobación se realizó en **Linux con Python 3.12** y paquetes recién
+instalados (Pydantic 2.14.4). No representa una ejecución nativa del BAT en Windows.
+No se modificaron los efectos, presets ni la interfaz compilada de la versión 1.1.0.
+
 ## Versión 1.1.0 — tiempos, transiciones y recortes (19 de noviembre de 2026)
 
 Resultados de esta versión:

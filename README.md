@@ -4,9 +4,9 @@ Editor local de video para Windows con desenfoque/pixelado, marca de agua inferi
 texto diagonal y presets completos. Interfaz React + TypeScript + Vite; motor
 Python + FastAPI + FFmpeg. No requiere cuentas, servicios pagos ni APIs externas.
 
-La versión **1.1.0** agrega tiempos por capa, transiciones y recortes del video.
-Incluye la reparación de entornos Python del lanzador Windows. La validación se
-documenta en `VALIDATION.md`.
+La versión **1.1.1** corrige la instalación inicial de las dependencias. Incluye
+los tiempos por capa, transiciones y recortes de la versión 1.1.0 y la reparación
+de entornos Python del lanzador Windows. La validación se documenta en `VALIDATION.md`.
 
 ## Empezar en Windows
 
